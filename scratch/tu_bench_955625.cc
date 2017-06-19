@@ -11,223 +11,270 @@ NS_LOG_COMPONENT_DEFINE("RNL_PA2");
 
 int main(int argc, char *argv[])
 {
-  bool verbose = false;
-  bool tracing = false;
-  double d_udp_bw = 0.0;
-  bool tcp_off = false;
-  bool westwoodplus = false;
+  /* * * * * * * * *  */
+  /* Config Variablen */
+  /* * * * * * * * *  */
+
+  int error_level = 0; /* hoffentlich nie > 0*/
+  double datenrate_udp_bw = 0.0;
+  int maxPacketSize = 1024;
+  double kilobyte = 1024.0;
+  double byte = 8.0;
+
+  bool wwp = false; /* TCP WestwoodPlus verwendet? */
+
+  double app_start = 5.0; /* Falls NS3 Anlaufprobleme hat? */
+  double app_duration = 30.0;
+
+  
+  /* Minirätsel: Warum habe ich die Portnummern so vergeben (^^)_(;,,;)_(^^) */
+  uint16_t port_TCP = 827;
+  uint16_t port_UDP = 837;
+
+/* Links zum Gateway */
+  std::string p2p_sender_dr_in_mbps = "10";  /* Datenrate in Mbp/s */
+  std::string p2p_sender_delay_in_ms = "20"; /* Delay in ms */
+
+  /* Link vom Gateway zur Senke */
+  std::string p2p_gateway_dr_in_mbps = "2"; /* Datenrate in Mbp/s */
+  std::string p2p_gateway_delay_in_ms = "45"; /* Delay in ms */
+  
+  /* Variablen für Valide Parameter */
   bool tcp_type_valid = false;
   bool udp_bw_valid = false;
-  bool queue_valid = false;
+  bool queue_valid = false;  
 
   std::string tcp_type = "Rfc793";
   std::string tcp_type_actual = "TcpRfc793";
-  std::string udp_bw = "0Mbps";
-  std::string queue = "RED";
+  std::string queue = "RED"; /* Standartmäßig RED */
+  std::string udp_bw = "0Mbps"; /* Standartmäßig aus */
 
+   bool log_level_enabled = false;
+
+  bool pcap_tracing = false;
   CommandLine cmd;
-  cmd.AddValue("tcp_type","Set TCP type", tcp_type);
-  cmd.AddValue("udp_bw","UDP Bandwidth", udp_bw);
-  cmd.AddValue("queue","Set Gateway queue type", queue);
-  cmd.AddValue("verbose","Tell echo application to log", verbose);
-  cmd.AddValue("tracing","Enable pcap tracing", tracing);
+
+  /* TCP Typ welcher getestet werden soll */
+  cmd.AddValue("tcp_type","Setze den TCP Typ", tcp_type);
+
+  /* Verwendende Queue Implementation */
+  cmd.AddValue("queue","Set Queue Typ", queue);
+  
+  /* Zu testende UDP Geschwindigkeit */
+  cmd.AddValue("udp_bw","Setze die UDP Bandbreite", udp_bw);
+    
+  /* Anzeigen von Detailierteren/Debug Information */
+  cmd.AddValue("log_level_enabled","Zeige detailiertere Informationen", log_level_enabled);
+
+  cmd.AddValue("pcap_tracing","Erstelle ein Pcap trace File", pcap_tracing);
+
+  /* Parse alle Parameter in die Variablen */
   cmd.Parse(argc,argv);
 
-  if(tcp_type == "TcpOff"){
-    tcp_off = true;
-    tcp_type_valid = true;
+  
+  /* Hier bekomme ich einen Segfault
+
+  std::string valid_typ_types[] = {"Rfc793","TcpRfc793","TcpTahoe","TcpReno","TcpNewReno","TcpWestwood","TcpWestwoodPlus"};
+  // Durchlaufe alle validen TCP Typen 
+  for(unsigned int pos=0; pos < sizeof(valid_typ_types); pos=pos+1){
+    // Falls es ein valider Typ ist 
+    std::string cmp = valid_typ_types[pos];
+    if(tcp_type == cmp){
+      tcp_type_actual = cmp; // merke welcher Typ es war 
+      tcp_type_valid = true; // merke dass es ein valider Typ war 
+    }    
   }
-  if(tcp_type == "Rfc793"){
+  */
+
+  if(tcp_type == "Rfc793" || tcp_type == "TcpTahoe" || tcp_type == "TcpReno" || tcp_type == "TcpReno" || tcp_type == "TcpNewReno" || tcp_type == "TcpWestwood" || tcp_type == "TcpWestwoodPlus"){
     tcp_type_actual = "TcpRfc793";
     tcp_type_valid = true;
   }
-  if(tcp_type == "TcpTahoe"){
-    tcp_type_actual = "TcpTahoe";
-    tcp_type_valid = true;
-  }
-  if(tcp_type == "TcpReno"){
-    tcp_type_actual = "TcpReno";
-    tcp_type_valid = true;
-  }
-  if(tcp_type == "TcpNewReno"){
-    tcp_type_actual = "TcpNewReno";
-    tcp_type_valid = true;
-  }
-  if(tcp_type == "TcpWestwood"){
-    tcp_type_actual = "TcpWestwood";
-    tcp_type_valid = true;
+
+  /* Dank der tollen Sonderfälle überprüfen wir diese*/
+  if(tcp_type =="Rfc793") {
+    /* Rfc793 hat in NS-3 eine besondere Bezeichnung */
+    tcp_type_actual = "TcpRfc793";
   }
   if(tcp_type == "TcpWestwoodPlus"){
+    /* WestwoodPlus wie WestwoodPlus erstellt werden */
     tcp_type_actual = "TcpWestwood";
-    westwoodplus = true;
-    tcp_type_valid = true;
+    wwp = true; /* und nacher angepasst werden */
+    
   }
 
+  /* Ausstieg falls Fehlerhafter TCP Typ */
   if(tcp_type_valid == false){
-    NS_ABORT_MSG("Invalid TCP Type.");
+    NS_ABORT_MSG("Der TCP Typ war fehlerhaft.");    
+    error_level=error_level+1;
+    return error_level; /* Wir sind raus ! */
   }
 
-  if(udp_bw == "0Mbps"){
-    d_udp_bw = 0.0;
-    udp_bw_valid = true;
-  }
-  if(udp_bw == "1Mbps"){
-    d_udp_bw = 1.0;
-    udp_bw_valid = true;
-  }
-  if(udp_bw == "2Mbps"){
-    d_udp_bw = 2.0;
+  /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  */
+  /* Überprüfen der Übergebenen Parameter für UDP Geschwindigkeit */
+  /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  */
+  if(udp_bw == "0Mbps" || udp_bw == "1Mbps" || udp_bw == "2Mbps"){
+    datenrate_udp_bw = 1.0*atoi(udp_bw.c_str());
     udp_bw_valid = true;
   }
 
+  /* Ausstieg falls fehlerhafte UDP Datenrate */  
   if(udp_bw_valid == false){
-    NS_ABORT_MSG("Invalid UDP Type.");
+    NS_ABORT_MSG("Die UDP Bandbreite war fehlerhaft");
+    error_level=error_level+1;
+    return error_level; /* Wir sind raus ! */
   }
-  if(verbose){
+  /* Setzte die Log Componenten falls gewünscht */
+  if(log_level_enabled){
+    /* Setzte auf INFO LOG_LEVEL */
     LogComponentEnable("OnOffApplication",LOG_LEVEL_INFO);
     LogComponentEnable("UdpClient",LOG_LEVEL_INFO);
     LogComponentEnable("UdpServer",LOG_LEVEL_INFO);
   }
 
-  if(tcp_off==false){
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType",StringValue("ns3::"+tcp_type_actual));
-    if(westwoodplus==true){
-      Config::SetDefault("ns3::TcpWestwood::ProtocolType",EnumValue(TcpWestwood::WESTWOODPLUS));
-    }
+  /*  * * * * * * * * * * */
+  /* TCP Protokoll setzen */
+  /*  * * * * * * * * * * */
+  Config::SetDefault("ns3::TcpL4Protocol::SocketType",StringValue("ns3::"+tcp_type_actual));
+  /* Westwoodplus Spezialfall */
+  if(wwp==true){
+    Config::SetDefault("ns3::TcpWestwood::ProtocolType",EnumValue(TcpWestwood::WESTWOODPLUS));
   }
 
-  NodeContainer node_0;
-  node_0.Create(1);
-  NodeContainer node_1;
-  node_1.Create(1);
-  NodeContainer node_2;
-  node_2.Create(1);
-  NodeContainer node_3;
-  node_3.Create(1);
+  /* * * * * * * * * *  */
+  /* Netzwerk Topologie */
+  /* * * * * * * * * *  */
 
+/* Erstelle Nodes */
+  /* Am schönsten wären hier Array, leider Segfaults */
+  NodeContainer node_tcp,node_udp,node_gate,node_rec;
+  node_tcp.Create(1); /* TCP Sender */
+  node_udp.Create(1); /* UDP Sender */
+  node_gate.Create(1); /* Gateway */
+  node_rec.Create(1); /* Reciever */
 
-  PointToPointHelper p2p_0;
-  p2p_0.SetDeviceAttribute("DataRate",StringValue("10Mbps"));
-  p2p_0.SetChannelAttribute("Delay",StringValue("20ms"));
-  PointToPointHelper p2p_1;
-  p2p_1.SetDeviceAttribute("DataRate",StringValue("10Mbps"));
-  p2p_1.SetChannelAttribute("Delay",StringValue("20ms"));
-  PointToPointHelper p2p_2;
-  StringValue dr = StringValue("2Mbps");
-  StringValue d = StringValue("45ms");
-  p2p_2.SetDeviceAttribute("DataRate",dr);
-  p2p_2.SetChannelAttribute("Delay",d);
+/* Erstelle Links */
+  PointToPointHelper p2p_tcp,p2p_udp,p2p_gate;
+  p2p_tcp.SetDeviceAttribute("DataRate",StringValue(p2p_sender_dr_in_mbps+"Mbps"));
+  p2p_tcp.SetChannelAttribute("Delay",StringValue(p2p_sender_delay_in_ms+"ms"));
+  
+  p2p_udp.SetDeviceAttribute("DataRate",StringValue(p2p_sender_dr_in_mbps+"Mbps"));
+  p2p_udp.SetChannelAttribute("Delay",StringValue(p2p_sender_delay_in_ms+"ms"));
+  
+  /* Der Link des Gateways unterscheidet sich */
+  p2p_gate.SetDeviceAttribute("DataRate",StringValue(p2p_gateway_dr_in_mbps+"Mbps"));
+  p2p_gate.SetChannelAttribute("Delay",StringValue(p2p_gateway_delay_in_ms+"ms"));
 
+/* Identifierziere Queue Typ */
+ std::string queue_type = "";
 
   if(queue=="RED"){
-    p2p_2.SetQueue("ns3::RedQueue");
-    if(verbose){
-      LogComponentEnable("RedQueue",LOG_LEVEL_LOGIC);
-    }
+    queue_type = "RedQueue";
     queue_valid = true;
   }
   if(queue=="DropTail"){
-    p2p_2.SetQueue("ns3::DropTailQueue");
-    if(verbose){
-      LogComponentEnable("DropTailQueue",LOG_LEVEL_LOGIC);
-    }
+    queue_type = "DropTailQueue";
     queue_valid = true;
   }
 
+/* Überprüfe ob Valider Queue Typ */
   if(queue_valid==false){
     NS_ABORT_MSG("Invalid queue Type.");
   }
 
-
-  NodeContainer nodes_p2p_0;
-  nodes_p2p_0.Add(node_0);
-  nodes_p2p_0.Add(node_2);
-  NetDeviceContainer ndc_p2p_0 = p2p_0.Install(nodes_p2p_0);
-
-  NodeContainer nodes_p2p_1;
-  nodes_p2p_1.Add(node_1);
-  nodes_p2p_1.Add(node_2);
-  NetDeviceContainer ndc_p2p_1 = p2p_1.Install(nodes_p2p_1);
-  
-  NodeContainer nodes_p2p_2;
-  nodes_p2p_2.Add(node_2);
-  nodes_p2p_2.Add(node_3);
-  NetDeviceContainer ndc_p2p_2 = p2p_2.Install(nodes_p2p_2);
-
-
-  InternetStackHelper internetStackH;
-  internetStackH.Install(node_0);
-  internetStackH.Install(node_1);
-  internetStackH.Install(node_2);
-  internetStackH.Install(node_3);
-
-
-  Ipv4AddressHelper ipv4;
-  ipv4.SetBase("10.0.0.0","255.255.255.0");
-  Ipv4InterfaceContainer iface_ndc_p2p_0 = ipv4.Assign(ndc_p2p_0);
-  ipv4.SetBase("10.0.1.0","255.255.255.0");
-  Ipv4InterfaceContainer iface_ndc_p2p_1 = ipv4.Assign(ndc_p2p_1);
-  ipv4.SetBase("10.0.3.0","255.255.255.0");
-  Ipv4InterfaceContainer iface_ndc_p2p_2 = ipv4.Assign(ndc_p2p_2);
-  
-
-  if(tcp_off==false){
-    uint16_t port_tcp_0 = 6666;
-    Address sinkLocalAddress_tcp0 (InetSocketAddress(Ipv4Address::GetAny(),port_tcp_0));
-    PacketSinkHelper sinkHelper_tcp_0("ns3::TcpSocketFactory",sinkLocalAddress_tcp0);
-    ApplicationContainer sinkApp_tcp_0 = sinkHelper_tcp_0.Install(node_3);
-    sinkApp_tcp_0.Start(Seconds(2.0));
-    sinkApp_tcp_0.Stop(Seconds(32.0));
-    
-    OnOffHelper clientHelper_tcp_0("ns3::TcpSocketFactory",iface_ndc_p2p_2.GetAddress(1));
-    clientHelper_tcp_0.SetAttribute("OnTime",StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    clientHelper_tcp_0.SetAttribute("OffTime",StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-    clientHelper_tcp_0.SetAttribute("DataRate",StringValue("10Mbps"));
-    clientHelper_tcp_0.SetAttribute("PacketSize",UintegerValue(1024));
-
-    ApplicationContainer clientApps_tcp_0;
-    AddressValue remoteAddress_tcp_0 (InetSocketAddress (iface_ndc_p2p_2.GetAddress(1),port_tcp_0));
-    clientHelper_tcp_0.SetAttribute("Remote",remoteAddress_tcp_0);
-
-    clientApps_tcp_0.Add(clientHelper_tcp_0.Install(node_0));
-
-    clientApps_tcp_0.Start(Seconds(2.0));
-    clientApps_tcp_0.Stop(Seconds(32.0));
+  /* Setze den Queue Typ, da valide */
+  p2p_gate.SetQueue("ns3::"+queue_type);
+  if(log_level_enabled){
+    /* Schalte ggf. Log ein */
+    LogComponentEnable(queue_type.c_str(),LOG_LEVEL_LOGIC);
   }
 
-  uint16_t port_udp = 5555;
-  UdpServerHelper server_udp (port_udp);
-  ApplicationContainer server_app = server_udp.Install(node_3.Get(0));
-  server_app.Start(Seconds(0.9));
-  server_app.Stop(Seconds(32.5));
 
-  double udp_start = 1.0;
-  double udp_end = 32.0;
-  double udp_diff = udp_end-udp_start;
-  UdpClientHelper client_udp(iface_ndc_p2p_2.GetAddress(1),port_udp);
+  /* Erstelle NodeContainers */
+  /* Am schönsten wären hier Array, leider Segfaults */
+  NodeContainer nodes_tcp2gate,nodes_udp2gate,nodes_gate2rec;
+  
+  nodes_tcp2gate.Add(node_tcp);
+  nodes_tcp2gate.Add(node_gate);
+  
+  nodes_udp2gate.Add(node_udp);
+  nodes_udp2gate.Add(node_gate);
+  
+  nodes_gate2rec.Add(node_gate);
+  nodes_gate2rec.Add(node_rec);
+  
+  /* Erstelle NetDeviceContainer */
+  NetDeviceContainer ndc_tcp2gate = p2p_tcp.Install(nodes_tcp2gate);
+  NetDeviceContainer ndc_udp2gate = p2p_udp.Install(nodes_udp2gate);
+  NetDeviceContainer ndc_gate2rec = p2p_gate.Install(nodes_gate2rec);
 
-  client_udp.SetAttribute("MaxPackets",UintegerValue(d_udp_bw*udp_diff*128));
-  client_udp.SetAttribute("Interval",TimeValue(Seconds(1.0/(128.0*d_udp_bw))));
-  client_udp.SetAttribute("PacketSize",UintegerValue(1024));
-  ApplicationContainer client_app = client_udp.Install(node_1.Get(0));
-  client_app.Start(Seconds(udp_start));
-  client_app.Stop(Seconds(udp_end));
+  /* Installiere alle Nodes */
+  InternetStackHelper internetStackH;
+  internetStackH.Install(node_tcp);
+  internetStackH.Install(node_udp);
+  internetStackH.Install(node_gate);
+  internetStackH.Install(node_rec);
+
+  /* Setze alle IP Addressen der Nodes */
+  /* Am schönsten wären hier Loop, Segfault */
+  Ipv4AddressHelper ipv4;
+  ipv4.SetBase("10.0.0.0","255.255.255.0");
+  Ipv4InterfaceContainer iface_ndc_tcp2gate = ipv4.Assign(ndc_tcp2gate);
+  ipv4.SetBase("10.0.1.0","255.255.255.0");
+  Ipv4InterfaceContainer iface_ndc_udp2gate = ipv4.Assign(ndc_udp2gate);
+  ipv4.SetBase("10.0.3.0","255.255.255.0");
+  Ipv4InterfaceContainer iface_ndc_gate2rec = ipv4.Assign(ndc_gate2rec);
+  
+  /* Berechne Zeitpunkt des Stops */
+  double app_end = app_duration+app_start;
+
+  /* Lege Addresse des Empfängers fest */
+  Address address_rec (InetSocketAddress(Ipv4Address::GetAny(),port_TCP));
+  PacketSinkHelper packetSH_rec("ns3::TcpSocketFactory",address_rec);
+  ApplicationContainer appC_rec = packetSH_rec.Install(node_rec);
+  /* Bestimmte Zeit der Aufnahme */
+  appC_rec.Start(Seconds(app_start));
+  appC_rec.Stop(Seconds(app_end));
+    
+  OnOffHelper onofhelper("ns3::TcpSocketFactory",iface_ndc_gate2rec.GetAddress(1));
+  ApplicationContainer appcontainer;
+  AddressValue remoteAddress_tcp_0 (InetSocketAddress (iface_ndc_gate2rec.GetAddress(1),port_TCP));
+
+  onofhelper.SetAttribute("OnTime",StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+  onofhelper.SetAttribute("OffTime",StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+  onofhelper.SetAttribute("DataRate",StringValue(p2p_sender_dr_in_mbps+"Mbps"));
+  onofhelper.SetAttribute("PacketSize",UintegerValue(maxPacketSize));
+  onofhelper.SetAttribute("Remote",remoteAddress_tcp_0);
+  
+  appcontainer.Add(onofhelper.Install(node_tcp));
+  appcontainer.Start(Seconds(app_start));
+  appcontainer.Stop(Seconds(app_end));
+
+  UdpServerHelper server_udp (port_UDP);
+  ApplicationContainer server_app = server_udp.Install(node_rec.Get(0));
+  server_app.Start(Seconds(app_start));
+  server_app.Stop(Seconds(app_end));
+
+  
+  double simulationsdauer = app_end-app_start;
+  UdpClientHelper client_udp(iface_ndc_gate2rec.GetAddress(1),port_UDP);
+
+  client_udp.SetAttribute("MaxPackets",UintegerValue(datenrate_udp_bw*simulationsdauer*(kilobyte/byte)));
+  client_udp.SetAttribute("Interval",TimeValue(Seconds(1.0/((kilobyte/byte)*datenrate_udp_bw))));
+  client_udp.SetAttribute("PacketSize",UintegerValue(maxPacketSize));
+  ApplicationContainer client_app = client_udp.Install(node_udp.Get(0));
+  client_app.Start(Seconds(app_start));
+  client_app.Stop(Seconds(app_end));
 
 
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-  if(tracing==true){
-    std::string pcap ="bench_";
-    pcap += tcp_type;
-    pcap += "_";
-    pcap += queue;
-    pcap += "_U";
-    pcap += udp_bw;
-
-    p2p_2.EnablePcap(pcap,node_3.Get(0)->GetId(),false,true);
+  if(pcap_tracing==true){
+    std::string pcap ="bench_"+tcp_type+"_"+queue+"_U"+udp_bw;
+    p2p_gate.EnablePcap(pcap,node_rec.Get(0)->GetId(),false,true);
   }
 
-  Simulator::Stop(Seconds(32));
+  Simulator::Stop(Seconds(app_end));
 
   Simulator::Run();
   Simulator::Destroy();

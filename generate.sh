@@ -1,31 +1,53 @@
 #!/bin/bash
 
-output="Auswertung/"
-path="scratch/"
-program="tu_bench_955625"
-pcapstart="bench_"
-pcapend1=".pcap"
-pcapend2="-3-0.pcap"
-u1="_"
-u2="_U"
+# Bash zum Ausführen meherer Tests
 
-tcp_type=("Rfc793" "TcpTahoe" "TcpReno" "TcpNewReno" "TcpWestwood" "TcpWestwoodPlus")
-udp_bw=("0Mbps" "1Mbps" "2Mbps")
-queue=("RED" "DropTail")
+# Config Variables #
+output="Auswertung/"	# Pfad zu den Auswertungen
+path="scratch/"			# Pfad in dem das TestSkript liegt
+program="tu_bench_955625"	# Name des TestSkript
+pcapstart="bench_"		# Bezeichnung für die Ausgabedatein
+pcapend1=".pcap"		# Dateiformat der endgültigen Ausgaben
 
+# Vorgaben des Formats für die Abgabe
+splitter1="_"	# Einfacher Trenner
+splitter2="_U" # Spezieller Trenner vor der Datenrate
+
+# TCP Typen, welche getestet werden sollen
+tcp_types=("Rfc793" "TcpNewReno" "TcpReno" "TcpTahoe" "TcpWestwood" "TcpWestwoodPlus")
+
+# Zu testende Geschwindigkeiten
+udp_bws=("0Mbps" "1Mbps" "2Mbps")
+
+# Zu testende Queue Implenentationen
+queues=("RED" "DropTail")
+
+# Erstelle Pfad zu den Auswertungen
 mkdir -p $output
 
-for tcp_type_e in "${tcp_type[@]}"
+# Ausführen aller Tests für:
+
+# Alle TCP Typen, sowie für
+for tcp_type in "${tcp_types[@]}"
 do
-	for queue_e in "${queue[@]}"
+	# Alle Queue Implementationen, sowie für
+	for queue in "${queues[@]}"
 	do
-		for udp_bw_e in "${udp_bw[@]}"
+		# Für alle Geschwindigkeiten
+		for udp_bw in "${udp_bws[@]}"
 		do
-			echo "start: $tcp_type_e-$udp_bw_e-$queue_e"
-			mkdir -p "$output/$tcp_type_e-$queue_e"
-			./waf --run "tu_bench_955625 --tcp_type=$tcp_type_e --udp_bw=$udp_bw_e --queue=$queue_e --tracing=true --verbose=false" --cwd $output #"$output$tcp_type_e-$udp_bw_e-$queue_e"
-			#echo "Move: $output$pcapstart$tcp_type_e$u1$queue_e$u2$udp_bw_e$pcapend2 --> $output$tcp_type_e-$queue_e/$pcapstart$tcp_type_e$u1$queue_e$u1$udp_bw_e$pcapend1"
-			mv "$output$pcapstart$tcp_type_e$u1$queue_e$u2$udp_bw_e$pcapend2" "$output$tcp_type_e-$queue_e/$pcapstart$tcp_type_e$u1$queue_e$u2$udp_bw_e$pcapend1"
+			echo "TCP[$tcp_type] \n Queue[$queue] \n Geschwindigkeit[$udp_bw]" # kurze Status Ausgabe
+			mkdir -p "$output/$tcp_type-$queue" # Erstelle Verzeichnis für den TCP Typ differenziert nach Queue Implentation
+			
+			# # # # # # #
+			# Herzstück #
+			# # # # # # #
+
+			# Führe TestSkript aus, mit übergabe der Parameter der aktuellen Situation
+			#            Programm       TCP Typ               Queue Typ        Datenrate      Mit PcaP_Aufzeichnung    Log
+			./waf --run "$program --tcp_type=$tcp_type --queue=$queue --udp_bw=$udp_bw --pcap_tracing=true --log_level_enabled=false" --cwd $output
+			echo "Move: $output$pcapstart$tcp_type$splitter1$queue$splitter2$udp_bw-3-0$pcapend1  -->  $output$tcp_type-$queue/$pcapstart$tcp_type$splitter1$queue$splitter2$udp_bw$pcapend1"
+			mv "$output$pcapstart$tcp_type$splitter1$queue$splitter2$udp_bw-3-0$pcapend1" "$output$tcp_type-$queue/$pcapstart$tcp_type$splitter1$queue$splitter2$udp_bw$pcapend1"
 		done
 	done
 done
