@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
   bool queue_valid = false;  
 
   std::string tcp_type = "Rfc793";
-  std::string tcp_type_actual = "TcpRfc793";
+  std::string tcp_type_set = "TcpRfc793";
   std::string queue = "RED"; /* Standartmäßig RED */
   std::string udp_bw = "0Mbps"; /* Standartmäßig aus */
 
@@ -80,25 +80,46 @@ int main(int argc, char *argv[])
     // Falls es ein valider Typ ist 
     std::string cmp = valid_typ_types[pos];
     if(tcp_type == cmp){
-      tcp_type_actual = cmp; // merke welcher Typ es war 
+      tcp_type_set = cmp; // merke welcher Typ es war 
       tcp_type_valid = true; // merke dass es ein valider Typ war 
     }    
   }
   */
 
-  if(tcp_type == "Rfc793" || tcp_type == "TcpTahoe" || tcp_type == "TcpReno" || tcp_type == "TcpNewReno" || tcp_type == "TcpWestwood" || tcp_type == "TcpWestwoodPlus"){
-    tcp_type_actual = tcp_type;
+  if(tcp_type == "Rfc793"){
+    tcp_type_set = "Rfc793";
     tcp_type_valid = true;
   }
+  if(tcp_type == "TcpTahoe"){
+    tcp_type_set = "TcpTahoe";
+    tcp_type_valid = true;
+  }
+  if(tcp_type == "TcpReno"){
+    tcp_type_set = "TcpReno";
+    tcp_type_valid = true;
+  }
+  if(tcp_type == "TcpNewReno"){
+    tcp_type_set = "TcpNewReno";
+    tcp_type_valid = true;
+  }
+  if(tcp_type == "TcpWestwood"){
+    tcp_type_set = "TcpWestwood";
+    tcp_type_valid = true;
+  }
+    if(tcp_type == "TcpWestwoodPlus"){
+    tcp_type_set = "TcpWestwoodPlus";
+    tcp_type_valid = true;
+  }
+  
 
   /* Dank der tollen Sonderfälle überprüfen wir diese*/
   if(tcp_type =="Rfc793") {
     /* Rfc793 hat in NS-3 eine besondere Bezeichnung */
-    tcp_type_actual = "TcpRfc793";
+    tcp_type_set = "TcpRfc793";
   }
   if(tcp_type == "TcpWestwoodPlus"){
     /* WestwoodPlus wie WestwoodPlus erstellt werden */
-    tcp_type_actual = "TcpWestwood";
+    tcp_type_set = "TcpWestwood";
     wwp = true; /* und nacher angepasst werden */
     
   }
@@ -113,8 +134,18 @@ int main(int argc, char *argv[])
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  */
   /* Überprüfen der Übergebenen Parameter für UDP Geschwindigkeit */
   /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  */
-  if(udp_bw == "0Mbps" || udp_bw == "1Mbps" || udp_bw == "2Mbps"){
-    datenrate_udp_bw = 1.0*atoi(udp_bw.c_str());
+
+  /* Auch hier kann ich nicht udp_bw zum double casten ==> Fehler */
+  if(udp_bw == "0Mbps"){
+    datenrate_udp_bw = 0.0;
+    udp_bw_valid = true;
+  }
+  if(udp_bw == "1Mbps"){
+    datenrate_udp_bw = 1.0;
+    udp_bw_valid = true;
+  }
+  if(udp_bw == "2Mbps"){
+    datenrate_udp_bw = 2.0;
     udp_bw_valid = true;
   }
 
@@ -135,7 +166,7 @@ int main(int argc, char *argv[])
   /*  * * * * * * * * * * */
   /* TCP Protokoll setzen */
   /*  * * * * * * * * * * */
-  Config::SetDefault("ns3::TcpL4Protocol::SocketType",StringValue("ns3::"+tcp_type_actual));
+  Config::SetDefault("ns3::TcpL4Protocol::SocketType",StringValue("ns3::"+tcp_type_set));
   /* Westwoodplus Spezialfall */
   if(wwp==true){
     Config::SetDefault("ns3::TcpWestwood::ProtocolType",EnumValue(TcpWestwood::WESTWOODPLUS));
