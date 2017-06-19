@@ -86,8 +86,8 @@ int main(int argc, char *argv[])
   }
   */
 
-  if(tcp_type == "Rfc793" || tcp_type == "TcpTahoe" || tcp_type == "TcpReno" || tcp_type == "TcpReno" || tcp_type == "TcpNewReno" || tcp_type == "TcpWestwood" || tcp_type == "TcpWestwoodPlus"){
-    tcp_type_actual = "TcpRfc793";
+  if(tcp_type == "Rfc793" || tcp_type == "TcpTahoe" || tcp_type == "TcpReno" || tcp_type == "TcpNewReno" || tcp_type == "TcpWestwood" || tcp_type == "TcpWestwoodPlus"){
+    tcp_type_actual = tcp_type;
     tcp_type_valid = true;
   }
 
